@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content= "initial-scale=1">
+    <title>ファイルを削除する</title>
+  </head>
+  <body>
+    <h1>ファイルを削除する</h1>
+    <form>
+      <p>ファイル名：<input type="text" id="fsFilename" value="abc.txt"></p>
+      <input type="button" value="ファイルを削除" id="removeFile">
+    </form>
+    <output id="result" ></output>
+    <script>
+      // クリックされたらファイルを削除する
+      document.getElementById("removeFile").addEventListener("click", function(){
+        window.webkitRequestFileSystem(
+          TEMPORARY,  // 一時的（テンポラリ）
+          0,    // サイズ
+          function(fs){ // 成功時のコールバック関数
+            // ファイルを削除
+            var filename = document.getElementById("fsFilename").value;
+            fs.root.getFile(filename, {},
+              function(fileEntry){
+                fileEntry.remove(function(){
+                  var text = "ファイル"+fileEntry.name+"を削除しました。<br>";
+                  document.getElementById("result").innerHTML = text;
+                },
+                function(err){  // 失敗時のコールバック関数
+                  document.getElementById("result").innerHTML = "削除エラー!!<br>"+err;
+                });
+              },
+              function(err){  // 失敗時のコールバック関数
+                document.getElementById("result").innerHTML = "ファイル削除エラー!!<br>"+err;
+              }
+            );
+          },
+          function(err){  // 失敗時のコールバック関数
+            document.getElementById("result").innerHTML = "エラー!!<br>"+err;
+          }
+        );
+      }, false);
+    </script>
+  </body>
+</html>
