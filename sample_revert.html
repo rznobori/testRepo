@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+<head>
+	<meta http-equiv="Content-Style-Type" content="text/css">
+	<meta http-equiv="Content-Script-Type" content="text/javascript">
+	<meta charset="UTF-8">
+	<title>Git revert for JavaScript</title>
+	<!-- js-git -->
+	<script src="../bundle.js"></script>
+	<!-- localStorage library -->
+	<script src="../store.min.js"></script>
+	<!-- Base64 converter -->
+	<script src="../base64.min.js"></script>
+	<!-- github API library -->
+	<script src="../githubjs.js"></script>
+
+	<!-- git revert for javascript -->
+	<script src="repoRevert.js"></script>
+	<script src="fileRevert.js"></script>
+
+	<!-- localstorage使用不可チェック -->
+	<script type="text/javascript">
+        if (!store.enabled)
+		{
+            alert('お使いの環境ではlocalstorageがサポートされていません');
+        }
+	</script>
+
+</head>
+<body>
+
+	<!-- ローカルリポジトリのファイルをすべて表示 -->
+	<p>リポジトリ内ファイル一覧（※画像ファイル表示とDLは未対応）</p>
+	<script type="text/javascript" src="../fileListDisp.js"></script>
+
+	<hr>
+
+	<button onclick="store.clear(); window.location.reload();">※LocalStorage全消去</button>
+
+	<p>リポジトリを指定リビジョンへ戻す<p>
+	<label>コミットID：</label>
+	<input type="text" id="revert_commit_id"><br>
+	<label>コミットメッセージ：</label>
+	<input type="text" id="revert_msg"><br>
+	<input type="button" value="repoRevert" onclick="repoRevert();">
+
+	<hr>
+
+	<p>指定ファイルを指定リビジョンへ戻す<p>
+	<label>ファイル：</label>
+	<select id="revert_file">
+		<script>
+			var fileList = store.get("__repoFiles");
+			var fileListLen = fileList.length;
+			for (var i = 0; i < fileListLen; i++)
+			{
+				document.write("<option value='"+ fileList[i] +"'>"+ fileList[i]);
+				document.write("</option>");
+			}
+		</script>
+	</select><br>
+	<label>コミットID：</label>
+	<input type="text" id="file_revert_commit_id"><br>
+	<label>コミットメッセージ：</label>
+	<input type="text" id="file_revert_msg"><br>
+	<input type="button" value="fileRevert" onclick="fileRevert();">
+
+	<hr>
+
+	<!-- git log -->
+	<script type="text/javascript" src="../gitLogDisp.js"></script>
+
+</body>
+</html>
