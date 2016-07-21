@@ -1,0 +1,193 @@
+function repoRevert()
+{
+	// リビジョン（コミットID）
+	var revision = document.getElementById("revert_commit_id").value;
+
+	// コミット必要情報の取得
+	var element_msg = document.getElementById("revert_msg").value || "revert -- ["+ revision +"]";
+	var element_author = "revert_author";
+	var element_email = "revert@xxx.com";
+
+	// リビジョン存在チェック
+	if (store.get(revision) === undefined)
+	{
+		alert("指定されたリビジョンは存在しません");
+		return;
+	}
+
+	// リポジトリファイルリスト取得
+	var repoFiles = store.get(revision).files;
+
+	// コミットに必要な情報を作成する
+	var existFileList = [];
+	var notExistFileList = [];
+	var repoFilesLen = repoFiles.length;
+	for (var i = 0; i < repoFilesLen; i++)
+	{
+		var commitInfo = store.get(revision);
+		var revertFileName = repoFiles[i];
+		var treeList = [];
+		
+		// 取得したコミット情報から、変更するファイルのツリー情報を取得する
+		// return　Object{ hash: ツリーハッシュ, tree: ツリー情報 }
+		var fileTreeInfo = getFileTreeInfo(revertFileName, commitInfo);
+		// コミット情報が取得出来なかった場合、指定から直近のリビジョンを探す
+		if (fileTreeInfo === false) {
+			// コミットツリーを指定されたリビジョンのひとつ前までの長さに加工
+			var repoCommitTreeList = store.get("__commitTree");
+			var aKey = repoCommitTreeList.lastIndexOf(revision);
+			repoCommitTreeList = repoCommitTreeList.slice(0, aKey);
+			repoCommitTreeList = repoCommitTreeList.reverse();
+			
+			// 指定されたリビジョンにファイルが存在しないもしくはリポジトリに指定コミットがない場合
+			if (repoCommitTreeList.length == 0 || aKey === -1)
+			{
+				// 存在しないファイルのリストを作成
+				notExistFileList.push(revertFileName);
+				continue;
+			}
+
+			// ファイルのコミットツリーを最新順にする
+			var file = store.get(revertFileName);
+			var fileCommitTreeList = file.commitTree;
+			fileCommitTreeList = fileCommitTreeList.reverse();
+
+			// 指定から直近のリビジョンの検索
+			var fileCommitTreeListLen = fileCommitTreeList.length;
+			for (var k = 0; k < fileCommitTreeListLen; k++)
+			{
+				var tempCommitHash = repoCommitTreeList[k];
+				if (fileCommitTreeList.lastIndexOf(tempCommitHash) !== -1)
+				{
+					commitInfo = store.get(tempCommitHash);
+					fileTreeInfo = getFileTreeInfo(revertFileName, commitInfo);
+					break;
+				}
+			}
+			
+			// 
+			if (fileTreeInfo === false)
+			{
+				// 存在しないファイルのリストを作成
+				notExistFileList.push(revertFileName);
+				continue;
+			}
+		}
+		existFileList.push(fileTreeInfo);
+		
+	}
+	console.log(existFileList);
+	console.log(notExistFileList);
+
+	// コミット必要情報の作成とファイル
+	var tempRepoFiles = repoFiles;
+	var treeHashList = [];
+	var fileInfoList = [];
+	var existFileListLen = existFileList.length;
+	for (var j = 0; j < existFileListLen; j++)
+	{
+		// コミット情報に付与するツリーリスト
+		treeHashList.push(existFileList[j].hash);
+		
+		// ファイル更新用オブジェクト配列
+		var tempFileName = Object.keys(existFileList[j].tree)[0];
+		var tempFileInfo =
+		{
+			name: tempFileName,
+			blob: existFileList[j].tree[tempFileName].hash,
+			tree: existFileList[j].hash
+		}
+		fileInfoList.push(tempFileInfo);
+		
+		// リポジトリファイルリストの作成
+		if (tempRepoFiles.indexOf(tempFileName) < 0) {
+			tempRepoFiles.push(tempFileName);
+		}
+	}
+
+
+	// コミット情報の作成
+	console.log("Create stert commitInfo.");
+    repo.saveAs("commit", 
+	{
+		author:
+		{
+			name: element_author,
+			email: element_email
+		},
+		tree: JSON.stringify(treeHashList),
+		message: element_msg
+	}, function(err, commitHash)
+	{
+		// commitHashを保存
+		repo.loadAs("commit", commitHash, function(err, commitObject)
+		{
+			// コミットツリーの生成
+			var commitTree = store.get("__commitTree") || [];
+			commitTree.push(commitHash);
+			store.set("__commitTree", commitTree);
+
+			// 親コミットを登録する
+			commitObject.parents.push(store.get("__refs/heads/master"));
+			
+			// 指定コミットより以前に存在しないファイルの削除
+			var notExistFileListLen = notExistFileList.length;
+			for (var y = 0; y < notExistFileListLen; y++)
+			{
+				var notFileName = notExistFileList[y];
+				var repoFileKey = repoFiles.lastIndexOf(notFileName);
+				tempRepoFiles.splice(repoFileKey, 1);
+			}
+			store.set("__repoFiles", tempRepoFiles);
+
+			// コミット情報をJSON形式でストレージへ保存
+			commitObject.files = store.get("__repoFiles");
+			store.set(commitHash, commitObject);
+
+			// 前回コミットハッシュを保存する（Resetなどで使用）
+			localStorage.setItem("__beforeCommit", localStorage.getItem("__refs/heads/master"));
+
+			// 最新コミットハッシュを保存する
+			localStorage.setItem("__refs/heads/master", commitHash);
+
+			// ファイルの状態を更新する
+			var fileInfoListLen = fileInfoList.length;
+			for (var x = 0; x < fileInfoListLen; x++)
+			{
+				var commitFile = store.get(fileInfoList[x].name);
+				commitFile.commitTree.push(commitHash);
+				commitFile.blob = fileInfoList[x].blob;
+				commitFile.tree = fileInfoList[x].tree;
+				store.set(fileInfoList[x].name, commitFile);
+			}
+
+			console.log("Create end commitInfo.");
+			alert("リポジトリを"+ revision +"へrevertしました。");
+			window.location.reload();
+		}); //END: repo.loadAs("commit")
+	});
+
+
+
+
+	/*  指定リビジョンの指定ファイルのツリー情報を取得
+	 **
+	 */
+	function getFileTreeInfo(revertFileName, commitInfo)
+	{
+		// treeListはそのまま取得すると文字列として取得するのでJSON.parseで配列オブジェクト化する
+		var treeList = JSON.parse(commitInfo.tree);
+		var treeListLen = treeList.length;
+		for(var i = 0; i < treeListLen; i++)
+		{
+			// treeHashから紐付くtree情報を取得しファイル名が一致するtree情報を返す
+			var treeHash = treeList[i];
+			var tree = store.get(treeHash);
+			if (tree[revertFileName])
+			{
+				return { hash: treeHash, tree: tree };
+			}
+		}
+		return false;
+	};
+}
